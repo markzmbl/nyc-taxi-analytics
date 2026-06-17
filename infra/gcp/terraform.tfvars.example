@@ -1,0 +1,30 @@
+# ============================================================================
+# GCP Terraform variables — copy to terraform.tfvars and fill in values
+#   cp terraform.tfvars.example terraform.tfvars
+# ============================================================================
+
+project_id = "your-gcp-project-id"    # REQUIRED: your GCP project
+project    = "nyc-taxi"
+region     = "us-east1"
+domain     = "nyctaxi.example.com"    # your real domain for ingress
+
+# ── Cloud SQL PostgreSQL ──────────────────────────────────────────────────────
+pg_admin_user     = "pgadmin"
+pg_admin_password = "CHANGE_ME_secure_password_32_chars_min"
+pg_tier           = "db-custom-2-4096"
+
+# ── GKE ───────────────────────────────────────────────────────────────────────
+gke_node_count  = 3
+gke_machine_type = "e2-standard-4"
+
+# ── Container image ───────────────────────────────────────────────────────────
+container_image_tag = "latest"
+
+# ── Airbyte ───────────────────────────────────────────────────────────────────
+airbyte_workspace_id = ""    # UUID from Airbyte workspace settings
+airbyte_username     = "admin@example.com"
+airbyte_password     = "CHANGE_ME_secure_airbyte_password"
+
+# ── EPA API ───────────────────────────────────────────────────────────────────
+epa_api_key = ""              # from https://aqs.epa.gov/aqsweb/documents/data_api.html
+epa_email   = "your-email@example.com"

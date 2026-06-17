@@ -1,0 +1,22 @@
+FROM docker:27.5.1-cli
+
+RUN apk add --no-cache curl bash
+
+# kubectl
+RUN curl -sSLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl && mv kubectl /usr/local/bin/
+
+# kind
+RUN curl -sSLO "https://kind.sigs.k8s.io/dl/v0.26.0/kind-linux-amd64" \
+    && mv kind-linux-amd64 /usr/local/bin/kind && chmod +x /usr/local/bin/kind
+
+# helm
+RUN curl -sSLO "https://get.helm.sh/helm-v3.17.0-linux-amd64.tar.gz" \
+    && tar -xzf helm-v3.17.0-linux-amd64.tar.gz \
+    && mv linux-amd64/helm /usr/local/bin/helm \
+    && rm -rf helm-v3.17.0-linux-amd64.tar.gz linux-amd64
+
+COPY scripts/kind-init.sh /usr/local/bin/kind-init.sh
+RUN chmod +x /usr/local/bin/kind-init.sh
+
+ENTRYPOINT ["kind-init.sh"]

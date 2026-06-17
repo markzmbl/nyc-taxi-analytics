@@ -1,0 +1,98 @@
+# Metabase — standalone K8s deployment
+# Runs in the dagster namespace alongside Dagster
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase
+  namespace: dagster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metabase
+  template:
+    metadata:
+      labels:
+        app: metabase
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2000
+        runAsGroup: 2000
+        fsGroup: 2000
+      containers:
+        - name: metabase
+          image: metabase/metabase:v0.53.6
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: MB_DB_TYPE
+              value: postgres
+            - name: MB_DB_DBNAME
+              value: metabase
+            - name: MB_DB_PORT
+              value: "5432"
+            - name: MB_DB_HOST
+              value: "${PG_HOST}"
+            - name: MB_DB_USER
+              value: "${PG_ADMIN_USER}"
+            - name: MB_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: dagster-postgres-secret
+                  key: password
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metabase
+  namespace: dagster
+spec:
+  selector:
+    app: metabase
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: metabase
+  namespace: dagster
+spec:
+  rules:
+    - host: metabase.${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: metabase
+                port:
+                  number: 3000

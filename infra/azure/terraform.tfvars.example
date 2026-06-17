@@ -1,0 +1,29 @@
+# ============================================================================
+# Azure Terraform variables — copy to terraform.tfvars and fill in values
+#   cp terraform.tfvars.example terraform.tfvars
+# ============================================================================
+
+project  = "nyc-taxi"
+location = "eastus"
+domain   = "nyctaxi.example.com"   # your real domain for ingress
+
+# ── PostgreSQL Flexible Server ────────────────────────────────────────────────
+pg_admin_user     = "pgadmin"
+pg_admin_password = "CHANGE_ME_secure_password_32_chars_min"
+pg_sku            = "B_Standard_B1ms"
+
+# ── AKS ───────────────────────────────────────────────────────────────────────
+aks_node_count = 3
+aks_vm_size    = "Standard_D4s_v5"
+
+# ── Container image ───────────────────────────────────────────────────────────
+container_image_tag = "latest"
+
+# ── Airbyte ───────────────────────────────────────────────────────────────────
+airbyte_workspace_id = ""    # UUID from Airbyte workspace settings
+airbyte_username     = "admin@example.com"
+airbyte_password     = "CHANGE_ME_secure_airbyte_password"
+
+# ── EPA API ───────────────────────────────────────────────────────────────────
+epa_api_key = ""              # from https://aqs.epa.gov/aqsweb/documents/data_api.html
+epa_email   = "your-email@example.com"

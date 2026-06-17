@@ -1,0 +1,47 @@
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM python:3.13.5-slim-bookworm AS builder
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python deps first for layer caching
+COPY pyproject.toml .
+RUN pip install --no-cache-dir . && \
+    pip install --no-cache-dir dbt-core dbt-postgres
+
+# Copy app code
+COPY . .
+
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+FROM python:3.13.5-slim-bookworm
+
+# Create non-root user
+RUN groupadd -r dagster && useradd -r -g dagster -m -s /bin/bash dagster
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy app code and fix ownership
+COPY --from=builder --chown=dagster:dagster /app /app
+
+# Pre-install dbt dependencies
+RUN cd /app/dbt && dbt deps --profiles-dir . 2>/dev/null || true
+
+USER dagster
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD dagster api grpc-health-check --port 4000 || exit 1
+
+# Workers are launched by the dagster daemon — no CMD needed.
+# Container Apps Jobs will override the entrypoint.
+CMD ["dagster", "api", "grpc", "--host", "0.0.0.0", "--port", "4000", "-f", "orchestration/definitions.py"]

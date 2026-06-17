@@ -1,0 +1,68 @@
+# Git — not needed in build context
+.git/
+.gitignore
+.gitattributes
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dagster local state
+dagster_home/
+
+# dbt artifacts
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Infrastructure state (secrets!)
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+override.tf
+
+# Squad / project management
+.squad/
+.ai-team/
+
+# GitHub workflows (not needed at runtime)
+.github/
+
+# Docker files themselves
+docker/
+docker-compose.yml
+Dockerfile*
+
+# Environment
+.env
+.env.*
+
+# Logs
+*.log
+
+# Node (if any)
+node_modules/
+
+# Kubernetes manifests (not needed at runtime)
+infra/

@@ -1,0 +1,80 @@
+###############################################################################
+# NYC Taxi Analytics — Full Local Dev Stack
+#
+#   docker compose up -d     # Postgres + Metabase + Kind (Airbyte + Dagster)
+#   docker compose down      # Graceful shutdown (Kind cluster preserved)
+#
+# Services:
+#   postgres   — PostgreSQL 16, databases: dagster, warehouse, metabase, airbyte
+#   metabase   — BI on :3001
+#   kind-init  — Creates Kind K8s cluster, deploys Airbyte + Dagster via Helm
+#
+# URLs:
+#   Dagster:   http://localhost:3000
+#   Airbyte:   http://localhost:8000
+#   Metabase:  http://localhost:3001
+#   Postgres:  localhost:5432
+#
+# Rebuild after code changes:
+#   docker compose build dagster-image && docker compose up -d kind-init
+###############################################################################
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PG_USER:-dagster}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-dagster}
+      POSTGRES_DB: dagster
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster"]
+      interval: 5s
+      retries: 5
+
+  metabase:
+    image: metabase/metabase:latest
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: "5432"
+      MB_DB_USER: ${PG_USER:-dagster}
+      MB_DB_PASS: ${PG_PASSWORD:-dagster}
+      MB_DB_HOST: postgres
+    ports:
+      - "3001:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Kind cluster init ───────────────────────────────────────────────────
+  # Mounts the Docker socket to create sibling containers (Kind nodes).
+  # Sets up a K8s cluster and deploys Airbyte + Dagster via Helm,
+  # then stays alive to keep the cluster managed.
+  kind-init:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.kind-init
+    volumes:
+      - //var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace:ro
+    environment:
+      - CLUSTER_NAME=nyc-taxi-dev
+      - PG_HOST=host.docker.internal
+      - PG_USER=${PG_USER:-dagster}
+      - PG_PASSWORD=${PG_PASSWORD:-dagster}
+      - AIRBYTE_WORKSPACE_ID=${AIRBYTE_WORKSPACE_ID:-}
+      - AIRBYTE_USERNAME=${AIRBYTE_USERNAME:-airbyte@example.com}
+      - AIRBYTE_PASSWORD=${AIRBYTE_PASSWORD:-password}
+      - EPA_API_KEY=${EPA_API_KEY:-}
+      - EPA_EMAIL=${EPA_EMAIL:-test@example.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

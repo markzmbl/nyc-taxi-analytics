@@ -1,0 +1,29 @@
+# ============================================================================
+# AWS Terraform variables — copy to terraform.tfvars and fill in values
+#   cp terraform.tfvars.example terraform.tfvars
+# ============================================================================
+
+project    = "nyc-taxi"
+region     = "us-east-1"
+domain     = "nyctaxi.example.com"   # your real domain for ingress
+
+# ── RDS PostgreSQL ────────────────────────────────────────────────────────────
+pg_admin_user     = "pgadmin"
+pg_admin_password = "CHANGE_ME_secure_password_32_chars_min"
+pg_instance_class = "db.t4g.medium"
+
+# ── EKS ───────────────────────────────────────────────────────────────────────
+eks_node_count    = 3
+eks_instance_type = "t3.xlarge"
+
+# ── Container image ───────────────────────────────────────────────────────────
+container_image_tag = "latest"
+
+# ── Airbyte ───────────────────────────────────────────────────────────────────
+airbyte_workspace_id = ""    # UUID from Airbyte workspace settings
+airbyte_username     = "admin@example.com"
+airbyte_password     = "CHANGE_ME_secure_airbyte_password"
+
+# ── EPA API ───────────────────────────────────────────────────────────────────
+epa_api_key = ""              # from https://aqs.epa.gov/aqsweb/documents/data_api.html
+epa_email   = "your-email@example.com"
