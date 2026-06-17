@@ -1,0 +1,35 @@
+# Airbyte connection configuration for NYC Citi Bike Trips
+# This file documents the expected Airbyte connection.
+# Configure via:  bash airbyte/setup_connections.sh
+#   or manually in the Airbyte UI at http://localhost:8000
+#
+# Source: S3 (tripdata bucket — public, us-east-1)
+#   - Format: CSV (gzipped via .zip extension)
+#   - Globs both NYC (*-citibike-tripdata.csv.zip)
+#             and JC  (JC-*-citibike-tripdata.csv.zip)
+#   - Compression: zip (must be explicitly configured in source definition)
+# Destination: PostgreSQL (raw schema)
+#   - Table: raw.citibike_trips
+#
+# Sync strategy: Full refresh | Overwrite
+#   Rationale: Tripdata publishes complete monthly files.  Historical files
+#   are static.  Full refresh overwrite is acceptable for ~60M-row dataset.
+#   Consider incremental append once watermarks are established.
+#
+# Schedule: Monthly on the 5th (Tripdata publishes monthly, offset from taxi)
+#   Cron: 0 3 5 * *
+
+connection:
+  name: nyc-citibike-trips
+  source: s3
+  destination: postgres
+  schedule: "0 3 5 * *"   # monthly, 5th day at 03:00 UTC (offset from taxi)
+  sync_mode: full_refresh_overwrite
+  streams:
+    - name: citibike-trips
+      glob: "*-citibike-tripdata.csv.zip"
+      format: csv
+      compression: zip
+      destination_table: raw.citibike_trips
+      description: Citi Bike trips (NYC + JC), ~60M rows total, 2013-present
+      primary_key: [starttime, stoptime, "start station id", "end station id", bikeid]

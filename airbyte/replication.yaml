@@ -1,0 +1,62 @@
+# Airbyte connection configuration for NYC Taxi Trips
+# This file documents the expected Airbyte connections.
+# Configure via:  bash airbyte/setup_connections.sh
+#   or manually in the Airbyte UI at http://localhost:8000
+#
+# Source: Azure Blob Storage (azureopendatastorage / nyctlc)
+#   - Format: Parquet (Hive-partitioned: puYear=*/puMonth=*/*.parquet)
+#   - All streams use schemaless mode (Parquet schema is well-defined upstream)
+# Destination: PostgreSQL (raw schema)
+#
+# Sync strategy: Full refresh | Overwrite
+#   Rationale: NYC TLC publishes complete monthly parquet files on Azure Open
+#   Datasets.  Historical files do not change.  Full refresh overwrite is
+#   acceptable for static historical data; consider incremental append for
+#   ongoing monthly loads once watermarks are established.
+#
+# Schedule: Monthly on the 3rd (TLC publishes ~2nd of month)
+#   Cron: 0 3 3 * *
+
+connection:
+  name: nyc-taxi-trips
+  source: azure-blob-storage
+  destination: postgres
+  schedule: "0 3 3 * *"   # monthly, 3rd day at 03:00 UTC
+  sync_mode: full_refresh_overwrite
+  streams:
+    - name: taxi_trips
+      glob: "yellow/puYear=*/puMonth=*/*.parquet"
+      format: parquet
+      destination_table: raw.taxi_trips
+      description: Yellow taxi (2009-present), ~1.5B rows total
+      primary_key: [vendorid, tpep_pickup_datetime, pulocationid]
+
+    - name: taxi_trips_green
+      glob: "green/puYear=*/puMonth=*/*.parquet"
+      format: parquet
+      destination_table: raw.taxi_trips_green
+      description: Green taxi (2013-present), ~200M rows total
+      primary_key: [vendorid, lpep_pickup_datetime, pulocationid]
+
+    - name: taxi_trips_fhv
+      glob: "fhv/puYear=*/puMonth=*/*.parquet"
+      format: parquet
+      destination_table: raw.taxi_trips_fhv
+      description: FHV (2015-present), dispatching_base_num + pickup_datetime
+      primary_key: [dispatching_base_num, pickup_datetime, pulocationid]
+
+    - name: taxi_trips_fhvhv
+      glob: "fhvhv/puYear=*/puMonth=*/*.parquet"
+      format: parquet
+      destination_table: raw.taxi_trips_fhvhv
+      description: High Volume FHV (2019-present), includes shared-ride flags
+      primary_key: [hvfhs_license_num, pickup_datetime, pulocationid]
+
+# Schema notes:
+#   Yellow/Green columns are structurally similar (fare_amount, tip_amount, etc.)
+#   but use different prefix conventions (tpep_ vs lpep_ for datetime columns).
+#   FHV has no fare/tip data.  FHVHV adds congestion_surcharge, shared_ride flags.
+#   All use locationid (integer) that joins to taxi_zone_lookup.location_id.
+#
+# Natural primary keys are approximate — TLC data can contain duplicates.
+# Use dbt surrogate keys for true uniqueness in the silver/gold layer.
