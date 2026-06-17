@@ -1,0 +1,83 @@
+###############################################################################
+# NetworkPolicy — airbyte namespace
+#
+# Rules:
+#   - Allow egress to postgres namespace (5432) — Airbyte state DB
+#   - Allow egress to S3-compatible / Azure Blob endpoints for log storage
+#   - Allow egress to MinIO (within cluster, port 9000)
+#   - Allow DNS egress (kube-dns, UDP+TCP 53)
+#   - Allow ingress within the airbyte namespace (server <-> worker <-> webapp)
+#
+# Apply:
+#   kubectl apply -f airbyte-namespace.yaml -n airbyte
+#
+# NOTE: If using S3 or Azure Blob directly (not MinIO), update the egress
+# CIDR blocks below to match your cloud provider's endpoint ranges.
+###############################################################################
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airbyte-allow
+  namespace: airbyte
+spec:
+  podSelector: {}                     # all pods in the airbyte namespace
+  policyTypes:
+    - Ingress
+    - Egress
+  # ── Ingress rules ────────────────────────────────────────────────────────────
+  ingress:
+    # Allow within airbyte namespace (inter-service communication)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: airbyte
+    # Allow from dagster namespace (dagster calls airbyte API)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: dagster
+  # ── Egress rules ─────────────────────────────────────────────────────────────
+  egress:
+    # Allow egress to postgres namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow egress to MinIO (within cluster)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: airbyte
+      ports:
+        - protocol: TCP
+          port: 9000
+    # Allow egress to AWS S3 endpoints (for log storage)
+    # CIDR ranges below are AWS S3 regional endpoints — replace with your region
+    #   us-east-1: 52.216.0.0/15
+    #   See: https://ip-ranges.amazonaws.com/ip-ranges.json
+    - to:
+        - ipBlock:
+            cidr: 52.216.0.0/15  # AWS S3 us-east-1
+      ports:
+        - protocol: TCP
+          port: 443
+    # Alternative: Allow egress to Azure Blob endpoints
+    # - to:
+    #     - ipBlock:
+    #         cidr: 20.150.0.0/15  # Azure Storage eastus
+    #   ports:
+    #     - protocol: TCP
+    #       port: 443
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

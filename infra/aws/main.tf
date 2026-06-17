@@ -2,16 +2,8 @@
 # AWS: EKS + Helm (Airbyte + Dagster + Metabase)
 # Replaces ECS Fargate with K8s-based deployment.
 #
-# Remote state backend (uncomment and configure for production):
-#   terraform {
-#     backend "s3" {
-#       bucket         = "nyc-taxi-tfstate"
-#       key            = "aws/terraform.tfstate"
-#       region         = "us-east-1"
-#       encrypt        = true
-#       dynamodb_table = "nyc-taxi-tf-lock"
-#     }
-#   }
+# Remote state backend — uncomment AFTER you create the S3 bucket + DynamoDB:
+#   See infra/terraform-state-setup.md for step-by-step instructions.
 ###############################################################################
 terraform {
   required_providers {
@@ -19,6 +11,35 @@ terraform {
     helm       = { source = "hashicorp/helm", version = "~> 2.12" }
     kubernetes = { source = "hashicorp/kubernetes", version = "~> 2.23" }
   }
+
+  # ── Remote state backend (S3 + DynamoDB) ─────────────────────────────────
+  # PREREQUISITES (run once, manually or via infra/terraform-state-setup.md):
+  #   aws s3api create-bucket --bucket nyc-taxi-tfstate \
+  #     --region us-east-1 --create-bucket-configuration LocationConstraint=us-east-1
+  #   aws s3api put-bucket-versioning --bucket nyc-taxi-tfstate \
+  #     --versioning-configuration Status=Enabled
+  #   aws s3api put-bucket-encryption --bucket nyc-taxi-tfstate \
+  #     --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+  #   aws s3api put-public-access-block --bucket nyc-taxi-tfstate \
+  #     --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+  #   aws dynamodb create-table --table-name nyc-taxi-tf-lock \
+  #     --attribute-definitions AttributeName=LockID,AttributeType=S \
+  #     --key-schema AttributeName=LockID,KeyType=HASH \
+  #     --billing-mode PAY_PER_REQUEST --region us-east-1
+  #
+  # MIGRATION (after resources are created):
+  #   cd infra/aws
+  #   terraform init -migrate-state
+  #   # Confirm yes when prompted to copy local state to S3.
+  #
+  # Uncomment the block below when ready:
+  # backend "s3" {
+  #   bucket         = "nyc-taxi-tfstate"
+  #   key            = "aws/terraform.tfstate"
+  #   region         = "us-east-1"
+  #   encrypt        = true
+  #   dynamodb_table = "nyc-taxi-tf-lock"
+  # }
 }
 
 provider "aws" { region = var.region }
@@ -144,9 +165,30 @@ resource "aws_eks_cluster" "main" {
   version  = "1.31"
 
   vpc_config {
-    subnet_ids              = aws_subnet.public[*].id
-    endpoint_public_access  = true
+    subnet_ids               = aws_subnet.public[*].id
+    endpoint_public_access   = var.eks_endpoint_public
+    endpoint_private_access  = true
+    # Restrict public access to specific CIDRs (e.g. office VPN or bastion).
+    # Only applies when endpoint_public_access = true.
+    # public_access_cidrs = var.eks_public_access_cidrs
   }
+
+  # ── Bastion / VPN setup for private-only clusters ────────────────────────────
+  # When endpoint_public_access = false, you need a way to reach the API server:
+  #
+  # Option 1 — Bastion host in the VPC:
+  #   1. Launch a small EC2 instance in a public subnet
+  #   2. SSH tunnel:  ssh -i key.pem -L 6443:K8S_ENDPOINT:443 ec2-user@bastion-ip
+  #   3. kubectl uses localhost:6443 as the API server
+  #
+  # Option 2 — AWS Client VPN or Site-to-Site VPN:
+  #   1. Create a Client VPN endpoint attached to the VPC
+  #   2. Route the VPC CIDR through the VPN
+  #   3. kubectl works directly from your machine while connected
+  #
+  # Option 3 — aws eks update-kubeconfig with --private:
+  #   aws eks update-kubeconfig --region us-east-1 --name nyc-taxi-eks --private
+  #   (requires the caller's network to have private VPC reachability via VPN/Direct Connect)
 
   depends_on = [aws_iam_role_policy_attachment.eks_cluster]
 }

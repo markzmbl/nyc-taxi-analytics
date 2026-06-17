@@ -1,0 +1,53 @@
+###############################################################################
+# NetworkPolicy — postgres namespace
+#
+# Rules:
+#   - Allow ingress from dagster namespace on port 5432
+#   - Allow ingress from airbyte namespace on port 5432
+#   - Allow ingress from metabase namespace on port 5432
+#   - Block all other ingress
+#
+# Apply:
+#   kubectl apply -f postgres-namespace.yaml -n postgres
+#
+# NOTE: This policy assumes PostgreSQL is running in the cluster in a
+# 'postgres' namespace. If you use a managed cloud database (RDS, Azure
+# PostgreSQL, Cloud SQL) and the app connects via a private endpoint, this
+# policy is unnecessary — managed DBs have their own firewall rules.
+###############################################################################
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-allow
+  namespace: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from dagster namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: dagster
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow from airbyte namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: airbyte
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow from metabase namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: metabase
+      ports:
+        - protocol: TCP
+          port: 5432

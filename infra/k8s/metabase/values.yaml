@@ -1,0 +1,112 @@
+###############################################################################
+# Metabase — Helm values (Bitnami chart)
+#
+# Repo: https://charts.bitnami.com/bitnami
+# Chart: bitnami/metabase
+#
+# This is a Helm alternative to the raw K8s manifest in
+# ../dagster/metabase.yaml. The config below matches that manifest.
+#
+# Usage:
+#   helm repo add bitnami https://charts.bitnami.com/bitnami
+#   helm repo update
+#   helm upgrade --install metabase bitnami/metabase \
+#     -n metabase --create-namespace -f values.yaml \
+#     --set postgresql.auth.password="<your-pg-password>" \
+#     --set env.MB_DB_HOST="<your-pg-host>"
+#
+# For local Kind:
+#   helm upgrade --install metabase bitnami/metabase \
+#     -n metabase --create-namespace -f values.yaml \
+#     --set postgresql.auth.password="dagster" \
+#     --set env.MB_DB_HOST="host.docker.internal"
+###############################################################################
+
+# ── Image ──────────────────────────────────────────────────────────────────────
+image:
+  registry: docker.io
+  repository: metabase/metabase
+  tag: v0.53.6
+  pullPolicy: IfNotPresent
+
+# ── Replica count ──────────────────────────────────────────────────────────────
+replicaCount: 1
+
+# ── Security context ───────────────────────────────────────────────────────────
+containerSecurityContext:
+  enabled: true
+  runAsNonRoot: true
+  runAsUser: 2000
+  runAsGroup: 2000
+
+podSecurityContext:
+  enabled: true
+  fsGroup: 2000
+
+# ── Environment (Metabase config) ──────────────────────────────────────────────
+env:
+  MB_DB_TYPE: postgres
+  MB_DB_DBNAME: metabase
+  MB_DB_PORT: "5432"
+  # MB_DB_HOST: set via --set at install time (or hardcode if preferred)
+  # MB_DB_USER: set via --set at install time
+  # MB_DB_PASS: read from existing secret (see extraSecretMounts below)
+
+# Mount an existing K8s secret for the Postgres password.
+# This references the dagster-postgres-secret (shared postgres credentials).
+# If metabase runs in its own namespace, copy the secret there first:
+#   kubectl get secret dagster-postgres-secret -n dagster -o yaml | \
+#     sed 's/namespace: dagster/namespace: metabase/' | kubectl apply -f -
+extraSecretMounts:
+  - name: postgres-credentials
+    secret: dagster-postgres-secret
+    mountPath: /tmp/secrets
+    readOnly: true
+    subPath: ""
+
+# ── Resources ──────────────────────────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1
+    memory: 2Gi
+
+# ── Service ────────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 3000
+
+# ── Ingress ────────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  hostname: metabase.nyctaxi.local  # override with --set for your domain
+  pathType: Prefix
+  path: /
+
+# ── Liveness & Readiness probes ────────────────────────────────────────────────
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /api/health
+    port: 3000
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /api/health
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# ── External PostgreSQL — disable the bundled postgresql chart ─────────────────
+# Metabase connects to the shared PostgreSQL instance.
+postgresql:
+  enabled: false

@@ -34,7 +34,17 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy app code and fix ownership
 COPY --from=builder --chown=dagster:dagster /app /app
 
-# Pre-install dbt dependencies
+# Pre-install dbt dependencies.
+# OPTION 1 — Build-time (current): packages are baked into the image.
+#   Pro: no volume mount needed in production, image is self-contained.
+#   Con: packages are re-downloaded on every build; image size increases.
+#
+# OPTION 2 — Volume mount (development): comment out the line below and
+#   mount ./dbt/packages into the container at /app/dbt/packages. This
+#   keeps packages across rebuilds and speeds up local iteration.
+#   In docker-compose.yml, add:
+#     volumes:
+#       - ./dbt/packages:/app/dbt/packages
 RUN cd /app/dbt && dbt deps --profiles-dir . 2>/dev/null || true
 
 USER dagster

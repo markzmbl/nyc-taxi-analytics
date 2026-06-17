@@ -1,5 +1,12 @@
 # Metabase — standalone K8s deployment
-# Runs in the dagster namespace alongside Dagster
+# Runs in the dagster namespace alongside Dagster.
+#
+# ALTERNATIVE: Use the Bitnami Helm chart for a more configurable deployment.
+#   See ../metabase/values.yaml for equivalent Helm values that match this
+#   manifest. The Helm approach is recommended for production:
+#     helm repo add bitnami https://charts.bitnami.com/bitnami
+#     helm upgrade --install metabase bitnami/metabase \
+#       -n dagster -f ../metabase/values.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:

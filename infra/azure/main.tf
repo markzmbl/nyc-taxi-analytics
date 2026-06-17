@@ -1,15 +1,8 @@
 ###############################################################################
 # Azure: AKS + Helm (Airbyte + Dagster + Metabase)
 #
-# Remote state backend (uncomment and configure for production):
-#   terraform {
-#     backend "azurerm" {
-#       resource_group_name  = "rg-nyc-taxi-tfstate"
-#       storage_account_name = "nyctaxitfstate"
-#       container_name       = "tfstate"
-#       key                  = "azure/terraform.tfstate"
-#     }
-#   }
+# Remote state backend — uncomment AFTER you create the storage resources:
+#   See infra/terraform-state-setup.md for step-by-step instructions.
 ###############################################################################
 terraform {
   required_providers {
@@ -17,6 +10,28 @@ terraform {
     helm       = { source = "hashicorp/helm",    version = "~> 2.12" }
     kubernetes = { source = "hashicorp/kubernetes", version = "~> 2.23" }
   }
+
+  # ── Remote state backend (Azure Storage Account) ─────────────────────────
+  # PREREQUISITES (run once, manually or via infra/terraform-state-setup.md):
+  #   az group create --name rg-nyc-taxi-tfstate --location eastus
+  #   az storage account create --name nyctaxitfstate \
+  #     --resource-group rg-nyc-taxi-tfstate --location eastus \
+  #     --sku Standard_LRS --kind StorageV2
+  #   az storage container create --name tfstate \
+  #     --account-name nyctaxitfstate
+  #
+  # MIGRATION (after resources are created):
+  #   cd infra/azure
+  #   terraform init -migrate-state
+  #   # Confirm yes when prompted to copy local state to Azure.
+  #
+  # Uncomment the block below when ready:
+  # backend "azurerm" {
+  #   resource_group_name  = "rg-nyc-taxi-tfstate"
+  #   storage_account_name = "nyctaxitfstate"
+  #   container_name       = "tfstate"
+  #   key                  = "azure/terraform.tfstate"
+  # }
 }
 
 provider "azurerm" { features {} }
@@ -78,14 +93,14 @@ resource "azurerm_postgresql_flexible_server" "main" {
   # Note: Storage is encrypted at rest by default in Azure PostgreSQL Flexible Server.
 }
 
-resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure" {
-  name             = "AllowAzureServices"
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_aks" {
+  name             = "AllowAKSSubnet"
   server_id        = azurerm_postgresql_flexible_server.main.id
-  # NOTE: This allows all Azure services. For production, restrict to AKS subnet:
-  # start_ip_address = cidrhost(azurerm_subnet.aks.address_prefixes[0], 0)
-  # end_ip_address   = cidrhost(azurerm_subnet.aks.address_prefixes[0], -1)
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
+  # Restrict to the AKS subnet CIDR. In production, never use 0.0.0.0.
+  # The variable aks_subnet_cidr defaults to "10.0.0.0/20" (matching snet-aks above).
+  # If you change the VNet address space or subnet prefix, update the variable.
+  start_ip_address = cidrhost(var.aks_subnet_cidr, 0)
+  end_ip_address   = cidrhost(var.aks_subnet_cidr, -1)
 }
 
 resource "azurerm_postgresql_flexible_server_database" "warehouse" {

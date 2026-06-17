@@ -1,0 +1,22 @@
+###############################################################################
+# Default deny-all NetworkPolicy (namespace-scoped)
+#
+# WARNING: This is a restrictive policy. It blocks ALL ingress and egress
+# traffic within the namespace. Enable it only AFTER you've applied the
+# per-namespace allow policies (dagster-namespace.yaml, airbyte-namespace.yaml,
+# postgres-namespace.yaml).
+#
+# To enable for a namespace:
+#   kubectl apply -f default-deny.yaml -n <namespace>
+#
+# Currently commented out — ready to enable when your allow policies are in place.
+###############################################################################
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: default-deny-all
+# spec:
+#   podSelector: {}          # select all pods in the namespace
+#   policyTypes:
+#     - Ingress
+#     - Egress
