@@ -11,10 +11,15 @@
 # Destination: PostgreSQL (raw schema)
 #   - Table: raw.citibike_trips
 #
-# Sync strategy: Full refresh | Overwrite
-#   Rationale: Tripdata publishes complete monthly files.  Historical files
-#   are static.  Full refresh overwrite is acceptable for ~60M-row dataset.
-#   Consider incremental append once watermarks are established.
+# Sync strategy: Incremental | Append + Dedup
+#   Uses started_at as cursor field with a 7-day lookback window.
+#   Destination mode is append_dedup using natural primary keys for
+#   idempotent reprocessing.  Watermarks tracked in raw._watermarks.
+#   Tripdata publishes monthly files; incremental means we only process
+#   net-new files rather than re-scanning ~60M rows of history.
+#
+#   Cursor field:  started_at
+#   Lookback window: 7 days (handles late-arriving tripdata corrections)
 #
 # Schedule: Monthly on the 5th (Tripdata publishes monthly, offset from taxi)
 #   Cron: 0 3 5 * *
@@ -24,7 +29,8 @@ connection:
   source: s3
   destination: postgres
   schedule: "0 3 5 * *"   # monthly, 5th day at 03:00 UTC (offset from taxi)
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append_dedup
+  lookback_window_days: 7
   streams:
     - name: citibike-trips
       glob: "*-citibike-tripdata.csv.zip"
@@ -32,4 +38,7 @@ connection:
       compression: zip
       destination_table: raw.citibike_trips
       description: Citi Bike trips (NYC + JC), ~60M rows total, 2013-present
-      primary_key: [starttime, stoptime, "start station id", "end station id", bikeid]
+      sync_mode: incremental
+      cursor_field: [started_at]
+      destination_sync_mode: append_dedup
+      primary_key: [started_at, ended_at, start_station_id, end_station_id, ride_id]

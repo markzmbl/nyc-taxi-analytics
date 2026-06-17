@@ -137,25 +137,29 @@ AZURE_SOURCE_ID=$(create_resource "source" "azure-blob-storage" '{
         "name": "taxi_trips",
         "format": { "filetype": "parquet" },
         "globs": ["yellow/puYear=*/puMonth=*/*.parquet"],
-        "schemaless": true
+        "schemaless": false,
+        "input_schema": "{\"type\":\"object\",\"properties\":{\"VendorID\":{\"type\":\"integer\"},\"tpep_pickup_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"tpep_dropoff_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"passenger_count\":{\"type\":\"integer\"},\"trip_distance\":{\"type\":\"number\"},\"RatecodeID\":{\"type\":\"integer\"},\"store_and_fwd_flag\":{\"type\":\"string\"},\"PULocationID\":{\"type\":\"integer\"},\"DOLocationID\":{\"type\":\"integer\"},\"payment_type\":{\"type\":\"integer\"},\"fare_amount\":{\"type\":\"number\"},\"extra\":{\"type\":\"number\"},\"mta_tax\":{\"type\":\"number\"},\"tip_amount\":{\"type\":\"number\"},\"tolls_amount\":{\"type\":\"number\"},\"total_amount\":{\"type\":\"number\"}}}"
       },
       {
         "name": "taxi_trips_green",
         "format": { "filetype": "parquet" },
         "globs": ["green/puYear=*/puMonth=*/*.parquet"],
-        "schemaless": true
+        "schemaless": false,
+        "input_schema": "{\"type\":\"object\",\"properties\":{\"VendorID\":{\"type\":\"integer\"},\"lpep_pickup_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"lpep_dropoff_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"passenger_count\":{\"type\":\"integer\"},\"trip_distance\":{\"type\":\"number\"},\"RatecodeID\":{\"type\":\"integer\"},\"store_and_fwd_flag\":{\"type\":\"string\"},\"PULocationID\":{\"type\":\"integer\"},\"DOLocationID\":{\"type\":\"integer\"},\"payment_type\":{\"type\":\"integer\"},\"fare_amount\":{\"type\":\"number\"},\"extra\":{\"type\":\"number\"},\"mta_tax\":{\"type\":\"number\"},\"tip_amount\":{\"type\":\"number\"},\"tolls_amount\":{\"type\":\"number\"},\"total_amount\":{\"type\":\"number\"}}}"
       },
       {
         "name": "taxi_trips_fhv",
         "format": { "filetype": "parquet" },
         "globs": ["fhv/puYear=*/puMonth=*/*.parquet"],
-        "schemaless": true
+        "schemaless": false,
+        "input_schema": "{\"type\":\"object\",\"properties\":{\"dispatching_base_num\":{\"type\":\"string\"},\"pickup_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"dropOff_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"PULocationID\":{\"type\":\"integer\"},\"DOLocationID\":{\"type\":\"integer\"},\"SR_Flag\":{\"type\":\"integer\"},\"Affiliated_base_number\":{\"type\":\"string\"}}}"
       },
       {
         "name": "taxi_trips_fhvhv",
         "format": { "filetype": "parquet" },
         "globs": ["fhvhv/puYear=*/puMonth=*/*.parquet"],
-        "schemaless": true
+        "schemaless": false,
+        "input_schema": "{\"type\":\"object\",\"properties\":{\"hvfhs_license_num\":{\"type\":\"string\"},\"dispatching_base_num\":{\"type\":\"string\"},\"pickup_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"dropoff_datetime\":{\"type\":\"string\",\"format\":\"date-time\"},\"PULocationID\":{\"type\":\"integer\"},\"DOLocationID\":{\"type\":\"integer\"},\"trip_miles\":{\"type\":\"number\"},\"trip_time\":{\"type\":\"integer\"},\"base_passenger_fare\":{\"type\":\"number\"},\"tolls\":{\"type\":\"number\"},\"sales_tax\":{\"type\":\"number\"},\"congestion_surcharge\":{\"type\":\"number\"},\"tips\":{\"type\":\"number\"},\"driver_pay\":{\"type\":\"number\"},\"shared_request_flag\":{\"type\":\"string\"},\"shared_match_flag\":{\"type\":\"string\"}}}"
       }
     ]
   }
@@ -189,6 +193,20 @@ S3_SOURCE_ID=$(create_resource "source" "citibike-s3" '{
 }')
 echo "  S3 source ID: ${S3_SOURCE_ID}"
 
+# --- HTTP source (TLC taxi zone lookup) ---
+echo "Creating HTTP source for taxi zone lookup..."
+ZONE_SOURCE_ID=$(create_resource "source" "tlc-zone-lookup" '{
+  "workspaceId": "'"${WORKSPACE_ID}"'",
+  "name": "tlc-zone-lookup",
+  "sourceDefinitionId": "d19ae824-e289-4b14-844a-532948bbda3b",
+  "connectionConfiguration": {
+    "url": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv",
+    "format": "csv",
+    "provider": { "name": "CSV" }
+  }
+}')
+echo "  Zone source ID: ${ZONE_SOURCE_ID}"
+
 # --- Connections ---
 echo "Creating taxi connection (yellow + green + fhv + fhvhv)..."
 create_resource "connection" "nyc-taxi-trips" '{
@@ -201,27 +219,35 @@ create_resource "connection" "nyc-taxi-trips" '{
   "prefix": "",
   "schedule": { "scheduleType": "cron", "cronExpression": "0 3 3 * *" },
   "scheduleData": { "cron": { "cronExpression": "0 3 3 * *", "cronTimeZone": "UTC" } },
-  "syncMode": "full_refresh_append",
+  "syncMode": "incremental",
   "streamConfigurations": [
     {
       "name": "taxi_trips",
-      "syncMode": "full_refresh",
-      "destinationSyncMode": "overwrite"
+      "syncMode": "incremental",
+      "cursorField": ["tpep_pickup_datetime"],
+      "destinationSyncMode": "append_dedup",
+      "primaryKey": [["VendorID"], ["tpep_pickup_datetime"], ["PULocationID"]]
     },
     {
       "name": "taxi_trips_green",
-      "syncMode": "full_refresh",
-      "destinationSyncMode": "overwrite"
+      "syncMode": "incremental",
+      "cursorField": ["lpep_pickup_datetime"],
+      "destinationSyncMode": "append_dedup",
+      "primaryKey": [["VendorID"], ["lpep_pickup_datetime"], ["PULocationID"]]
     },
     {
       "name": "taxi_trips_fhv",
-      "syncMode": "full_refresh",
-      "destinationSyncMode": "overwrite"
+      "syncMode": "incremental",
+      "cursorField": ["pickup_datetime"],
+      "destinationSyncMode": "append_dedup",
+      "primaryKey": [["dispatching_base_num"], ["pickup_datetime"], ["PULocationID"]]
     },
     {
       "name": "taxi_trips_fhvhv",
-      "syncMode": "full_refresh",
-      "destinationSyncMode": "overwrite"
+      "syncMode": "incremental",
+      "cursorField": ["pickup_datetime"],
+      "destinationSyncMode": "append_dedup",
+      "primaryKey": [["hvfhs_license_num"], ["pickup_datetime"], ["PULocationID"]]
     }
   ]
 }' > /dev/null
@@ -238,16 +264,40 @@ create_resource "connection" "nyc-citibike-trips" '{
   "prefix": "",
   "schedule": { "scheduleType": "cron", "cronExpression": "0 3 5 * *" },
   "scheduleData": { "cron": { "cronExpression": "0 3 5 * *", "cronTimeZone": "UTC" } },
-  "syncMode": "full_refresh_append",
+  "syncMode": "incremental",
   "streamConfigurations": [
     {
       "name": "citibike-trips",
+      "syncMode": "incremental",
+      "cursorField": ["started_at"],
+      "destinationSyncMode": "append_dedup",
+      "primaryKey": [["started_at"], ["ended_at"], ["start_station_id"], ["end_station_id"], ["ride_id"]]
+    }
+  ]
+}' > /dev/null
+echo "  Connection: nyc-citibike-trips ✓"
+
+echo "Creating taxi zone lookup connection..."
+create_resource "connection" "nyc-taxi-zone-lookup" '{
+  "workspaceId": "'"${WORKSPACE_ID}"'",
+  "name": "nyc-taxi-zone-lookup",
+  "sourceId": "'"${ZONE_SOURCE_ID}"'",
+  "destinationId": "'"${DEST_ID}"'",
+  "namespaceDefinition": "custom_format",
+  "namespaceFormat": "raw",
+  "prefix": "",
+  "schedule": { "scheduleType": "cron", "cronExpression": "0 3 15 * *" },
+  "scheduleData": { "cron": { "cronExpression": "0 3 15 * *", "cronTimeZone": "UTC" } },
+  "syncMode": "full_refresh_append",
+  "streamConfigurations": [
+    {
+      "name": "taxi_zone_lookup",
       "syncMode": "full_refresh",
       "destinationSyncMode": "overwrite"
     }
   ]
 }' > /dev/null
-echo "  Connection: nyc-citibike-trips ✓"
+echo "  Connection: nyc-taxi-zone-lookup ✓"
 
 # --- Update .env with workspace ID ---
 ENV_FILE="$(dirname "$0")/../.env"
@@ -268,10 +318,12 @@ echo "=== Done! ==="
 echo "Workspace ID:  ${WORKSPACE_ID}"
 echo "Azure source:  ${AZURE_SOURCE_ID}  (4 streams: yellow, green, fhv, fhvhv)"
 echo "S3 source:     ${S3_SOURCE_ID}  (1 stream: citibike)"
+echo "Zone source:   ${ZONE_SOURCE_ID}  (1 stream: taxi_zone_lookup)"
 echo "Destination:   ${DEST_ID}"
 echo ""
 echo "Connections:"
-echo "  nyc-taxi-trips       — scheduled monthly on 3rd at 03:00 UTC"
-echo "  nyc-citibike-trips   — scheduled monthly on 5th at 03:00 UTC"
+echo "  nyc-taxi-trips         — incremental+dedup, monthly on 3rd at 03:00 UTC"
+echo "  nyc-citibike-trips     — incremental+dedup, monthly on 5th at 03:00 UTC"
+echo "  nyc-taxi-zone-lookup   — full_refresh, monthly on 15th at 03:00 UTC"
 echo ""
 echo "Now run:  dagster dev -w workspace.yaml"

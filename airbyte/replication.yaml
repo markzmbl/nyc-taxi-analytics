@@ -5,14 +5,23 @@
 #
 # Source: Azure Blob Storage (azureopendatastorage / nyctlc)
 #   - Format: Parquet (Hive-partitioned: puYear=*/puMonth=*/*.parquet)
-#   - All streams use schemaless mode (Parquet schema is well-defined upstream)
+#   - Explicit JSON schemas defined per stream (see setup_connections.sh)
 # Destination: PostgreSQL (raw schema)
 #
-# Sync strategy: Full refresh | Overwrite
-#   Rationale: NYC TLC publishes complete monthly parquet files on Azure Open
-#   Datasets.  Historical files do not change.  Full refresh overwrite is
-#   acceptable for static historical data; consider incremental append for
-#   ongoing monthly loads once watermarks are established.
+# Sync strategy: Incremental | Append + Dedup
+#   Each stream uses a pickup-datetime cursor field with a 7-day lookback
+#   window to capture late-arriving data.  Destination mode is append_dedup
+#   using natural primary keys so reprocessed files are idempotent.
+#   Watermarks are tracked in raw._watermarks (see scripts/init_db.sql).
+#   TLC publishes monthly parquet files ~2nd of each month; incremental
+#   means we only process net-new files rather than re-scanning all history.
+#
+#   Cursor fields per dataset:
+#     - Yellow:  tpep_pickup_datetime
+#     - Green:   lpep_pickup_datetime
+#     - FHV:     pickup_datetime
+#     - FHVHV:   pickup_datetime
+#   Lookback window: 7 days (handles late-arriving TLC corrections)
 #
 # Schedule: Monthly on the 3rd (TLC publishes ~2nd of month)
 #   Cron: 0 3 3 * *
@@ -22,13 +31,17 @@ connection:
   source: azure-blob-storage
   destination: postgres
   schedule: "0 3 3 * *"   # monthly, 3rd day at 03:00 UTC
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_append_dedup
+  lookback_window_days: 7
   streams:
     - name: taxi_trips
       glob: "yellow/puYear=*/puMonth=*/*.parquet"
       format: parquet
       destination_table: raw.taxi_trips
       description: Yellow taxi (2009-present), ~1.5B rows total
+      sync_mode: incremental
+      cursor_field: [tpep_pickup_datetime]
+      destination_sync_mode: append_dedup
       primary_key: [vendorid, tpep_pickup_datetime, pulocationid]
 
     - name: taxi_trips_green
@@ -36,6 +49,9 @@ connection:
       format: parquet
       destination_table: raw.taxi_trips_green
       description: Green taxi (2013-present), ~200M rows total
+      sync_mode: incremental
+      cursor_field: [lpep_pickup_datetime]
+      destination_sync_mode: append_dedup
       primary_key: [vendorid, lpep_pickup_datetime, pulocationid]
 
     - name: taxi_trips_fhv
@@ -43,6 +59,9 @@ connection:
       format: parquet
       destination_table: raw.taxi_trips_fhv
       description: FHV (2015-present), dispatching_base_num + pickup_datetime
+      sync_mode: incremental
+      cursor_field: [pickup_datetime]
+      destination_sync_mode: append_dedup
       primary_key: [dispatching_base_num, pickup_datetime, pulocationid]
 
     - name: taxi_trips_fhvhv
@@ -50,6 +69,9 @@ connection:
       format: parquet
       destination_table: raw.taxi_trips_fhvhv
       description: High Volume FHV (2019-present), includes shared-ride flags
+      sync_mode: incremental
+      cursor_field: [pickup_datetime]
+      destination_sync_mode: append_dedup
       primary_key: [hvfhs_license_num, pickup_datetime, pulocationid]
 
 # Schema notes:
@@ -58,5 +80,33 @@ connection:
 #   FHV has no fare/tip data.  FHVHV adds congestion_surcharge, shared_ride flags.
 #   All use locationid (integer) that joins to taxi_zone_lookup.location_id.
 #
+# Explicit schemas are defined in setup_connections.sh (input_schema field).
+# Key columns with enforced types per dataset:
+#
+#   Yellow / Green (shared shape, different prefix):
+#     VendorID (int), tpep/lpep_pickup_datetime (timestamp),
+#     tpep/lpep_dropoff_datetime (timestamp), passenger_count (int),
+#     trip_distance (float), PULocationID (int), DOLocationID (int),
+#     RatecodeID (int), store_and_fwd_flag (string), payment_type (int),
+#     fare_amount (float), extra (float), mta_tax (float), tip_amount (float),
+#     tolls_amount (float), total_amount (float)
+#
+#   FHV:
+#     dispatching_base_num (string), pickup_datetime (timestamp),
+#     dropOff_datetime (timestamp), PULocationID (int), DOLocationID (int),
+#     SR_Flag (int)
+#
+#   FHVHV:
+#     hvfhs_license_num (string), dispatching_base_num (string),
+#     pickup_datetime (timestamp), dropoff_datetime (timestamp),
+#     PULocationID (int), DOLocationID (int), trip_miles (float),
+#     trip_time (int), base_passenger_fare (float), tolls (float),
+#     sales_tax (float), congestion_surcharge (float), tips (float),
+#     driver_pay (float), shared_request_flag (string),
+#     shared_match_flag (string)
+#
 # Natural primary keys are approximate — TLC data can contain duplicates.
 # Use dbt surrogate keys for true uniqueness in the silver/gold layer.
+#
+# Watermark table: raw._watermarks (see scripts/init_db.sql)
+#   Tracks per-source cursor position for incremental syncs.
