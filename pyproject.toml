@@ -1,0 +1,112 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nyc-taxi-analytics"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "dagster>=1.7,<2.0",
+    "dagster-webserver>=1.7,<2.0",
+    "dagster-postgres>=0.23,<1.0",
+    "dagster-dbt>=0.23,<1.0",
+    "dagster-airbyte>=0.23,<1.0",
+    "dbt-core>=1.8,<2.0",
+    "dbt-postgres>=1.8,<2.0",
+    "azure-storage-blob>=12.19,<13.0",
+    "holidays",
+    "psycopg2-binary>=2.9,<3.0",
+    "pyarrow>=15.0",
+    "pandas>=1.5",
+    "requests>=2.31,<3.0",
+    "sqlalchemy>=2.0,<3.0",
+    "pydantic>=2.0,<3.0",
+    "pydantic-settings>=2.0,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver",
+    "pytest",
+    "ruff",
+    "black",
+    "isort",
+    "mypy",
+    "types-requests",
+    "types-psycopg2",
+    "copier>=9.0",
+]
+
+# ── Warehouse engine slots (install the one you deploy) ──────────────────────
+duckdb = [
+    "dbt-duckdb>=1.8,<2.0",
+    "duckdb>=1.0",
+    "dlt[duckdb]>=1.0",
+]
+motherduck = [
+    "dbt-duckdb>=1.8,<2.0",
+    "dlt[motherduck]>=1.0",
+]
+clickhouse = [
+    "dbt-clickhouse>=1.8,<2.0",
+    "clickhouse-connect>=0.7",
+    "dlt[clickhouse]>=1.0",
+]
+
+[tool.setuptools.packages.find]
+exclude = ["dagster*", "dbt*", "docker*", "scripts*", "transform*"]
+
+# ── Tooling ─────────────────────────────────────────────────────────────────
+# Division of labor (kept non-overlapping so the tools don't fight):
+#   black  → formatting        isort → import ordering (profile=black)
+#   ruff   → linting (import-sort rule "I" left OFF; isort owns that)
+#   mypy   → static types
+
+[tool.black]
+target-version = ["py311"]
+extend-exclude = "/(\\.venv|airbyte/connectors|dbt|dagster_home)/"
+
+[tool.isort]
+profile = "black"
+src_paths = ["common", "airbyte", "orchestration"]
+skip_glob = [".venv/*", "airbyte/connectors/*", "dbt/*", "dagster_home/*"]
+
+[tool.ruff]
+target-version = "py311"
+extend-exclude = [".venv", "airbyte/connectors", "dbt", "dagster_home", "dbt_packages"]
+
+[tool.ruff.lint]
+# E/F = pyflakes+pycodestyle, B = bugbear, UP = pyupgrade.
+# "I" (import sorting) intentionally omitted — isort owns imports.
+select = ["E", "F", "B", "UP"]
+# E501 (line length) is owned by black, which intentionally leaves long
+# string literals (SQL, URLs) unwrapped — don't double-flag them.
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+files = ["common", "airbyte", "orchestration", "ingestion"]
+exclude = "(^airbyte/connectors/|/\\.venv/)"
+# orchestration/ and airbyte/ are namespace packages (no __init__.py); without
+# this, mypy maps e.g. resources.py to both "resources" and
+# "orchestration.resources". Anchor every file to a single dotted module.
+namespace_packages = true
+explicit_package_bases = true
+# Pragmatic baseline: first-party code is checked, untyped third-party libs
+# (dagster, pandas, pyarrow, psycopg2) don't block. Legacy modules aren't
+# forced to full annotations yet; new code in `common` is.
+ignore_missing_imports = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = "common.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
