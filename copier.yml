@@ -1,0 +1,114 @@
+# Copier template configuration for the analytics blueprint.
+#
+#   copier copy gh:your-org/analytics-blueprint my-customer-project
+#
+# Only files ending in `.jinja` are rendered as templates; everything else is
+# copied verbatim. This keeps dbt SQL (`{{ ref() }}`) and other Jinja-using
+# files safe from Copier's own templating.
+
+_templates_suffix: ".jinja"
+_answers_file: .copier-answers.yml
+
+_exclude:
+  # Blueprint-only meta (don't ship into generated projects)
+  - "copier.yml"
+  - "README.blueprint.md"
+  - ".github/workflows/template-smoke.yml"
+  # VCS / envs / caches
+  - ".git"
+  - "**/.venv"
+  - "**/__pycache__"
+  - "**/*.py[co]"
+  - "**/*.egg-info"
+  - "**/.pytest_cache"
+  - "**/.mypy_cache"
+  - "**/.ruff_cache"
+  - "node_modules"
+  # Squad / dev-team tooling — the squad is YOUR team, not shipped to customers
+  - ".squad"
+  - ".copilot"
+  - ".claude"
+  - ".github/agents"
+  - ".github/copilot-instructions.md"
+  - ".github/workflows/squad-heartbeat.yml"
+  - ".github/workflows/squad-issue-assign.yml"
+  - ".github/workflows/squad-triage.yml"
+  - ".github/workflows/sync-squad-labels.yml"
+  - ".mcp.json"
+  - ".copier-answers-squad.yml"
+  # NYC demo — dropped when include_demo is false
+  - "{% if not include_demo %}transform/models/demo{% endif %}"
+  - "{% if not include_demo %}ingestion/sources/nyc_zones.py{% endif %}"
+  - "{% if not include_demo %}orchestration/assets/ingestion_assets.py{% endif %}"
+  # Generated / runtime artifacts
+  - "dagster_home/storage"
+  - "dagster_home/.telemetry"
+  - "**/*.duckdb"
+  - "**/*.duckdb.wal"
+  - ".dlt"
+  - "logs"
+  - "**/target"          # dbt target/
+  - "**/dbt_packages"
+  # Stray scratch files from the legacy pipeline
+  - "check_body.json"
+  - "patch_body.json"
+  - "patch_pk.json"
+  - "source_update*.json"
+  - "sync_trigger.json"
+
+# ── Questions ───────────────────────────────────────────────────────────────
+project_name:
+  type: str
+  help: Human-readable project name
+  default: Acme Analytics
+
+project_slug:
+  type: str
+  help: Package / dbt project slug (snake_case)
+  default: "{{ project_name | lower | replace(' ', '_') | replace('-', '_') }}"
+
+warehouse_engine:
+  type: str
+  help: Warehouse engine (data path)
+  choices:
+    - duckdb
+    - motherduck
+    - clickhouse
+  default: duckdb
+
+ingestion_tool:
+  type: str
+  help: Ingestion tool
+  choices:
+    - dlt
+    - airbyte
+  default: dlt
+
+serving:
+  type: str
+  help: "Serving/BI tools — comma-separated subset of: metabase, superset, cube"
+  default: metabase
+
+default_tier:
+  type: str
+  help: Default deployment tier
+  choices:
+    - studio
+    - atelier
+    - resident
+  default: studio
+
+cloud_target:
+  type: str
+  help: Cloud provider for the Resident tier
+  choices:
+    - aws
+    - azure
+    - gcp
+  default: aws
+  when: "{{ default_tier == 'resident' }}"
+
+include_demo:
+  type: bool
+  help: Include the NYC reference demo (sources, models, dashboards)?
+  default: true
