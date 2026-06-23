@@ -1,0 +1,5 @@
+# Studio tier: local SQLite-backed instance storage (Dagster default when no
+# storage is configured — files live under $DAGSTER_HOME). The Atelier and
+# Resident tiers override this with Postgres / managed storage.
+telemetry:
+  enabled: false

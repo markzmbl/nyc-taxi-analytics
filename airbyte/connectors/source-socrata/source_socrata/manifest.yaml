@@ -1,0 +1,310 @@
+---
+# Socrata Source Connector — Low-Code CDK Manifest
+#
+# Generic connector for any Socrata (Socrata Open Data API) dataset.
+# Configurable via domain, resource_id, cursor_field, and start_date.
+#
+# Socrata API pattern:
+#   GET https://{domain}/resource/{resource_id}.json
+#     ?$limit=50000&$offset=0
+#     &$where={cursor_field} >= '2023-01-01T00:00:00' AND {cursor_field} <= '2023-03-31T23:59:59'
+#     &$order={cursor_field} ASC
+#
+# The DatetimeBasedCursor partitions the date range into windows (step: P90D by default,
+# matching the Dagster assets' 90-day chunk strategy). Each window generates a stream
+# slice with start_time / end_time, which are interpolated into the $where SoQL clause.
+#
+# OffsetIncrement handles pagination within each date window (50000 records per page,
+# matching the Dagster assets' PAGE_SIZE).
+
+version: "0.1.0"
+
+definitions:
+  # ── Base requester ──
+  # Builds the Socrata API URL: https://{domain}/resource/{resource_id}.json
+  requester:
+    type: HttpRequester
+    url_base: "https://{{ config['domain'] }}"
+    path: "resource/{{ config['resource_id'] }}.json"
+    http_method: "GET"
+    authenticator:
+      # Socrata uses X-App-Token for higher rate limits (10k req/hr vs 1k req/hr
+      # anonymous). The token is optional — when absent or empty, the header
+      # value is an empty string and Socrata treats the request as anonymous.
+      # We use Jinja's default() filter so a missing app_token key doesn't crash.
+      type: ApiKeyAuthenticator
+      header: "X-App-Token"
+      api_token: "{{ config['app_token'] | default('') }}"
+
+  # ── Offset pagination ──
+  # Socrata uses $limit + $offset for pagination.
+  # Page size of 50000 matches the Dagster assets' PAGE_SIZE.
+  # The paginator stops when a page returns fewer records than page_size.
+  paginator:
+    type: DefaultPaginator
+    page_size_option:
+      type: RequestOption
+      inject_into: request_parameter
+      field_name: "$limit"
+    pagination_strategy:
+      type: OffsetIncrement
+      page_size: 50000
+    page_token_option:
+      type: RequestOption
+      inject_into: request_parameter
+      field_name: "$offset"
+
+  # ── Record selector ──
+  # Socrata returns a JSON array of records directly (no envelope).
+  # The selector extracts the entire response body as the record list.
+  record_selector:
+    type: RecordSelector
+    extractor:
+      type: DpathExtractor
+      field_path: []
+
+  # ── Incremental sync cursor ──
+  # DatetimeBasedCursor partitions the date range [start_date, now] into windows.
+  # Each window becomes a stream slice with {start_time, end_time}.
+  # The $where clause is built by interpolating these slice values + the cursor_field.
+  #
+  # step: P90D = 90-day windows (matches Dagster assets' chunk strategy)
+  # cursor_granularity: PT1S = second-level precision
+  # lookback_window: P7D = 7-day lookback to catch late-arriving records
+  incremental_sync:
+    type: DatetimeBasedCursor
+    cursor_field: "{{ config['cursor_field'] }}"
+    datetime_format: "%Y-%m-%dT%H:%M:%S"
+    cursor_granularity: "PT1S"
+    step: "P90D"
+    lookback_window: "P7D"
+    start_datetime:
+      type: MinMaxDatetime
+      datetime: "{{ config['start_date'] }}"
+      datetime_format: "%Y-%m-%dT%H:%M:%S"
+    end_datetime:
+      type: MinMaxDatetime
+      datetime: "{{ config['end_date'] | default(now_utc().strftime('%Y-%m-%dT%H:%M:%S')) }}"
+      datetime_format: "%Y-%m-%dT%H:%M:%S"
+    # Partition field names — these are available in the stream slice for interpolation
+    partition_field_start: "start_time"
+    partition_field_end: "end_time"
+
+  # ── Retriever ──
+  # Combines requester, paginator, record selector.
+  # The stream_slicer is the DatetimeBasedCursor (defined above as incremental_sync).
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    paginator:
+      $ref: "#/definitions/paginator"
+    record_selector:
+      $ref: "#/definitions/record_selector"
+    # Request parameters that use interpolated stream slice values.
+    # The $where clause filters records by cursor_field within the date window.
+    # The $order clause ensures deterministic ordering for cursor progression.
+    requester_options:
+      - request_parameters:
+          # Build the SoQL $where clause from the stream slice's start/end times
+          # and the user-configured cursor_field.
+          # Format: {cursor_field} >= '2023-01-01T00:00:00' AND {cursor_field} <= '2023-03-31T23:59:59'
+          "$where": "{{ config['cursor_field'] }} >= '{{ stream_slice['start_time'] }}' AND {{ config['cursor_field'] }} <= '{{ stream_slice['end_time'] }}'"
+          "$order": "{{ config['cursor_field'] }} ASC"
+
+  # ── Error handler ──
+  # Socrata returns HTTP 429 for rate limiting and 503 for maintenance.
+  # Retry with exponential backoff on these status codes.
+  # Also retry on 5xx server errors.
+  error_handler:
+    type: CompositeErrorHandler
+    error_handlers:
+      - type: DefaultErrorHandler
+        response_filters:
+          - action: RETRY
+            error_message_contains: "429"
+            backoff_strategies:
+              - type: ExponentialBackoffStrategy
+                factor: 5
+          - action: RETRY
+            http_status_code: 429
+            backoff_strategies:
+              - type: ExponentialBackoffStrategy
+                factor: 5
+          - action: RETRY
+            http_status_code: 503
+            backoff_strategies:
+              - type: ExponentialBackoffStrategy
+                factor: 10
+          - action: RETRY
+            http_status_code: 500
+            backoff_strategies:
+              - type: ExponentialBackoffStrategy
+                factor: 5
+      - type: DefaultErrorHandler
+
+# ── Streams ──
+# Single generic stream. The stream name is fixed ("socrata_records") because
+# the Low-Code CDK does not support Jinja interpolation in the stream name field.
+# The resource_id is preserved in each record via the _socrata_resource_id field
+# added by AddFields below, so downstream consumers can distinguish datasets.
+# The schema is permissive (additionalProperties: true) — Socrata returns JSON
+# with varying fields per record, so we use a permissive schema.
+streams:
+  - type: DeclarativeStream
+    name: "socrata_records"
+    # Explicitly set namespace to empty string. Without this, some CDK versions
+    # default to using the stream name as the namespace, which causes
+    # "Missing catalog stream for the stream (namespace: socrata_records, name: null)"
+    # errors in the Airbyte orchestrator.
+    namespace: ""
+    primary_key:
+      - "unique_key"
+    # The schema defines common Socrata fields as explicit properties so the
+    # Airbyte Postgres destination creates typed columns. additionalProperties:true
+    # allows any extra fields the dataset returns. The destination will create
+    # columns for the explicit properties below; fields not listed here are
+    # still emitted by the connector but may not get their own destination column.
+    schema_loader:
+      type: InlineSchemaLoader
+      schema:
+        type: object
+        additionalProperties: true
+        properties:
+          unique_key:
+            type: ["null", "string"]
+          created_date:
+            type: ["null", "string"]
+          closed_date:
+            type: ["null", "string"]
+          complaint_type:
+            type: ["null", "string"]
+          descriptor:
+            type: ["null", "string"]
+          borough:
+            type: ["null", "string"]
+          agency:
+            type: ["null", "string"]
+          status:
+            type: ["null", "string"]
+          latitude:
+            type: ["null", "string"]
+          longitude:
+            type: ["null", "string"]
+          incident_zip:
+            type: ["null", "string"]
+          cmplnt_num:
+            type: ["null", "string"]
+          cmplnt_fr_dt:
+            type: ["null", "string"]
+          cmplnt_fr_tm:
+            type: ["null", "string"]
+          boro_nm:
+            type: ["null", "string"]
+          ofns_desc:
+            type: ["null", "string"]
+          start_date_time:
+            type: ["null", "string"]
+          end_date_time:
+            type: ["null", "string"]
+          event_id:
+            type: ["null", "string"]
+          event_name:
+            type: ["null", "string"]
+          event_type:
+            type: ["null", "string"]
+          camis:
+            type: ["null", "string"]
+          dba:
+            type: ["null", "string"]
+          inspection_date:
+            type: ["null", "string"]
+          inspection_type:
+            type: ["null", "string"]
+          violation_code:
+            type: ["null", "string"]
+          grade:
+            type: ["null", "string"]
+          score:
+            type: ["null", "string"]
+          _socrata_resource_id:
+            type: ["null", "string"]
+          _socrata_domain:
+            type: ["null", "string"]
+    retriever:
+      $ref: "#/definitions/retriever"
+    incremental_sync:
+      $ref: "#/definitions/incremental_sync"
+    transformations:
+      - type: AddFields
+        fields:
+          - path: ["_socrata_resource_id"]
+            value: "{{ config['resource_id'] }}"
+          - path: ["_socrata_domain"]
+            value: "{{ config['domain'] }}"
+
+# ── Connection check ──
+# Verify connectivity by reading 1 record from the stream.
+check:
+  type: CheckStream
+  stream_names: ["socrata_records"]
+
+# ── Connector spec ──
+# User-configurable parameters. These appear in the Airbyte UI when setting up a source.
+spec:
+  type: Spec
+  documentation_url: "https://dev.socrata.com/docs/queries/"
+  connection_specification:
+    type: object
+    required:
+      - domain
+      - resource_id
+      - start_date
+      - cursor_field
+    properties:
+      end_date:
+        type: string
+        title: "End Date (Optional)"
+        description: "ISO datetime for the end of the sync range (format: YYYY-MM-DDTHH:MM:SS). If omitted, syncs up to the current time. Use this to limit data volume for pilot syncs."
+        pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+        examples:
+          - "2023-06-30T23:59:59"
+      domain:
+        type: string
+        title: "Socrata Domain"
+        description: "The Socrata domain (without https://). Default: data.cityofnewyork.us for NYC Open Data."
+        default: "data.cityofnewyork.us"
+        examples:
+          - "data.cityofnewyork.us"
+          - "data.ny.gov"
+          - "data.seattle.gov"
+      resource_id:
+        type: string
+        title: "Resource ID"
+        description: "The Socrata 4x4 resource identifier (e.g., erm2-nwe9 for 311 Service Requests)."
+        examples:
+          - "erm2-nwe9"
+          - "qgea-i56i"
+          - "tvpp-9vvx"
+          - "43nn-pn8j"
+      app_token:
+        type: string
+        title: "Socrata App Token (Optional)"
+        description: "Socrata app token for higher API rate limits (10000 req/hr with token vs 1000 req/hr without). Register at https://dev.socrata.com/docs/app-tokens.html. Leave empty for anonymous access."
+        airbyte_secret: true
+      start_date:
+        type: string
+        title: "Start Date"
+        description: "ISO datetime for the start of incremental syncs (format: YYYY-MM-DDTHH:MM:SS). Records with cursor_field >= this date will be synced."
+        pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+        examples:
+          - "2023-01-01T00:00:00"
+      cursor_field:
+        type: string
+        title: "Cursor Field"
+        description: "The Socrata field name used for incremental sync (date-based watermark). This field must exist in the dataset and contain datetime values."
+        examples:
+          - "created_date"
+          - "cmplnt_fr_dt"
+          - "start_date_time"
+          - "inspection_date"

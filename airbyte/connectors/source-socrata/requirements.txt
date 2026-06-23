@@ -1,0 +1,5 @@
+# Airbyte CDK — provides YamlDeclarativeSource and all Low-Code CDK components
+# (DatetimeBasedCursor, OffsetIncrement, DefaultPaginator, etc.)
+# Pinned to 6.x: the last series that ships the Low-Code CDK YAML manifest
+# engine without the pendulum<3.0.0 dependency that breaks on Python 3.12+.
+airbyte-cdk>=6.0.0,<7.0.0

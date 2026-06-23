@@ -1,0 +1,20 @@
+name: analytics
+version: "1.0.0"
+config-version: 2
+
+profile: analytics
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  analytics:
+    core:
+      +materialized: view
+    # Demo models (optional, dropped when include_demo=false) configure their own
+    # materialization inline (staging = view by default, dims = table).

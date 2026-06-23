@@ -1,0 +1,20 @@
+# Sample configuration for the Socrata source connector.
+# This config targets the NYC 311 Service Requests dataset (erm2-nwe9).
+#
+# To test:
+#   cd airbyte/connectors/source-socrata
+#   pip install -e .
+#   python main.py spec
+#   python main.py check --config config.yaml
+#
+# For other datasets, change resource_id, cursor_field, and start_date:
+#   NYPD Complaints:     resource_id=qgea-i56i,    cursor_field=cmplnt_fr_dt
+#   Event Permits:       resource_id=tvpp-9vvx,    cursor_field=start_date_time
+#   Restaurant Inspections: resource_id=43nn-pn8j, cursor_field=inspection_date
+
+domain: "data.cityofnewyork.us"
+resource_id: "erm2-nwe9"
+# app_token: ""  # Optional — register at https://dev.socrata.com/docs/app-tokens.html
+start_date: "2023-01-01T00:00:00"
+end_date: "2023-06-30T23:59:59"
+cursor_field: "created_date"

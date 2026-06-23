@@ -1,0 +1,7 @@
+﻿{
+  "domain": "data.cityofnewyork.us",
+  "resource_id": "erm2-nwe9",
+  "start_date": "2023-01-01T00:00:00",
+  "end_date": "2023-01-01T23:59:59",
+  "cursor_field": "created_date"
+}

@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Landing schema written by the dlt ingestion pipeline.
+    schema: raw
+    tables:
+      - name: nyc_taxi_zones
+        description: NYC TLC taxi-zone lookup (demo source, loaded via dlt).

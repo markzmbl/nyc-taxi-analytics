@@ -1,0 +1,129 @@
+###############################################################################
+# Airbyte OSS — Helm values
+# Repo:  https://airbytehq.github.io/helm-charts
+# Chart: airbyte/airbyte
+# Usage: helm upgrade --install airbyte airbyte/airbyte \
+#          -n airbyte --create-namespace -f values.yaml
+###############################################################################
+
+global:
+  deploymentMode: "oss"
+  edition: "community"
+
+  # Postgres for Airbyte internals (state DB)
+  database:
+    host: ${pg_host}
+    port: 5432
+    database: airbyte
+    username: ${pg_admin_user}
+    password: ${pg_admin_password}
+
+  # Log storage (MinIO for OSS, or S3/GCS/Azure Blob)
+  storage:
+    type: "minio"
+    minio:
+      enabled: true
+      persistence:
+        size: 20Gi
+
+  # Ingress / external access
+  ingress:
+    enabled: true
+    host: airbyte.${domain}
+
+# Scale worker pods for connector execution
+worker:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  # JVM takes ~30-50s to start on a single-node Kind cluster.
+  # The default liveness probe (initialDelay 30s, timeout 1s, failureThreshold 3)
+  # kills the pod before it finishes booting. The startupProbe gates liveness
+  # until the container is actually ready.
+  livenessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 6
+  startupProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 12
+
+workload-launcher:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  livenessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 6
+  startupProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 12
+
+server:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 2Gi
+  # Server startup takes ~50s (Temporal init + DB migration). Default probe
+  # (initialDelay 30s, timeout 10s, failureThreshold 3) kills it at ~60s.
+  livenessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 20
+    timeoutSeconds: 15
+    failureThreshold: 6
+  startupProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 10
+    failureThreshold: 18
+
+workload-api-server:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  livenessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 20
+    timeoutSeconds: 15
+    failureThreshold: 6
+  startupProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 10
+    failureThreshold: 12
+
+webapp:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+temporal:
+  enabled: true

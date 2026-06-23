@@ -1,0 +1,22 @@
+﻿{
+  "streams": [
+    {
+      "stream": {
+        "name": "socrata_records",
+        "json_schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {}
+        },
+        "supported_sync_modes": ["full_refresh", "incremental"],
+        "source_defined_cursor": true,
+        "default_cursor_field": ["created_date"],
+        "source_defined_primary_key": [["unique_key"]]
+      },
+      "sync_mode": "full_refresh",
+      "destination_sync_mode": "overwrite",
+      "cursor_field": ["created_date"],
+      "primary_key": [["unique_key"]]
+    }
+  ]
+}

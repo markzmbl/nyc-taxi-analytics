@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Socrata Record",
+  "description": "Permissive schema for Socrata records. The connector uses InlineSchemaLoader with additionalProperties: true, so this file is not loaded at runtime. It exists for documentation and as a fallback if the inline schema is removed.",
+  "type": "object",
+  "additionalProperties": true
+}

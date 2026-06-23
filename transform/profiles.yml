@@ -1,0 +1,32 @@
+# One switch — STACK_WAREHOUSE — selects the active target (and is the same env
+# var dlt/common.config read), so the whole stack follows a single setting.
+# Per-target connection values come from the engine's env (DUCKDB_*, MOTHERDUCK_*,
+# CLICKHOUSE_*). Required values (e.g. MOTHERDUCK_TOKEN, CLICKHOUSE_HOST) have no
+# default and fail loudly if the engine is selected without them.
+analytics:
+  target: "{{ env_var('STACK_WAREHOUSE', 'duckdb') }}"
+  outputs:
+    duckdb:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'warehouse.duckdb') }}"
+      schema: main
+      threads: 8
+
+    motherduck:
+      type: duckdb
+      path: "md:{{ env_var('MOTHERDUCK_DATABASE', 'warehouse') }}?motherduck_token={{ env_var('MOTHERDUCK_TOKEN') }}"
+      schema: main
+      threads: 8
+
+    clickhouse:
+      type: clickhouse
+      driver: http
+      host: "{{ env_var('CLICKHOUSE_HOST') }}"
+      # Quoted (valid YAML) but each value is a single expression, so dbt's
+      # native rendering preserves the int/bool type the adapter requires.
+      port: "{{ env_var('CLICKHOUSE_PORT', '8123') | int }}"
+      user: "{{ env_var('CLICKHOUSE_USER', 'default') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD', '') }}"
+      schema: "{{ env_var('CLICKHOUSE_DATABASE', 'warehouse') }}"
+      secure: "{{ (env_var('CLICKHOUSE_SECURE', 'false') | lower) == 'true' }}"
+      threads: 8

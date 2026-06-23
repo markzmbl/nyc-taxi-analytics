@@ -1,0 +1,51 @@
+# Serving slot — BI + semantic tools. Enable the ones in STACK_SERVING via
+# compose profiles:  docker compose --profile metabase --profile cube up -d
+#
+# Connection specifics differ per warehouse engine (drivers, read-locks) — see
+# serving/README.md. Cube is the most env-drivable; Metabase/Superset add their
+# data source via UI/API after first boot.
+
+services:
+  metabase:
+    image: metabase/metabase:v0.53.6
+    profiles: ["metabase"]
+    ports:
+      - "3001:3000"
+    volumes:
+      # Community DuckDB/ClickHouse driver JARs (Metabase has no built-in driver).
+      - ./serving/metabase/plugins:/plugins
+      # DuckDB file, read-only (Studio). Ignored by server engines.
+      - ${WAREHOUSE_DIR:-./}:/data:ro
+
+  superset:
+    image: apache/superset:4.1.1
+    profiles: ["superset"]
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-dev-only-change-me}
+    volumes:
+      - ${WAREHOUSE_DIR:-./}:/data:ro
+    # First run: `superset fab create-admin && superset db upgrade && superset init`
+    # then add the warehouse SQLAlchemy URI (duckdb:////data/...; clickhousedb://...).
+
+  cube:
+    image: cubejs/cube:v1.3
+    profiles: ["cube"]
+    ports:
+      - "4000:4000"   # Cube Playground / REST
+      - "15432:15432" # Cube SQL API
+    environment:
+      CUBEJS_DEV_MODE: "true"
+      # duckdb (also MotherDuck via token) | clickhouse — see README mapping.
+      CUBEJS_DB_TYPE: ${CUBE_DB_TYPE:-duckdb}
+      CUBEJS_DB_DUCKDB_DATABASE_PATH: /data/${DUCKDB_FILE:-warehouse.duckdb}
+      CUBEJS_DB_DUCKDB_MOTHERDUCK_TOKEN: ${MOTHERDUCK_TOKEN:-}
+      CUBEJS_DB_HOST: ${CLICKHOUSE_HOST:-}
+      CUBEJS_DB_PORT: ${CLICKHOUSE_PORT:-8123}
+      CUBEJS_DB_USER: ${CLICKHOUSE_USER:-default}
+      CUBEJS_DB_PASS: ${CLICKHOUSE_PASSWORD:-}
+      CUBEJS_DB_NAME: ${CLICKHOUSE_DATABASE:-warehouse}
+    volumes:
+      - ${WAREHOUSE_DIR:-./}:/data:ro
+      - ./serving/cube:/cube/conf

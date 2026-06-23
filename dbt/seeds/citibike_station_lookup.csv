@@ -1,0 +1,46 @@
+station_id,station_name,latitude,longitude,capacity,borough
+72,W 52 St & 11 Ave,40.7673,-73.9939,55,Manhattan
+79,Franklin St & W Broadway,40.7191,-74.0067,33,Manhattan
+82,St James Pl & Pearl St,40.7112,-74.0002,27,Manhattan
+83,Atlantic Ave & Fort Greene Pl,40.6838,-73.9764,62,Brooklyn
+116,W 17 St & 8 Ave,40.7418,-74.0015,46,Manhattan
+119,Park Ave & St Edwards St,40.6963,-73.9776,19,Brooklyn
+120,Lexington Ave & Classon Ave,40.6868,-73.9593,19,Brooklyn
+127,Barrow St & Hudson St,40.7312,-74.0063,27,Manhattan
+128,MacDougal St & Prince St,40.7270,-74.0027,30,Manhattan
+146,W 20 St & 11 Ave,40.7468,-74.0072,36,Manhattan
+150,E 2 St & Avenue C,40.7208,-73.9801,31,Manhattan
+151,Cleveland Pl & Spring St,40.7222,-73.9973,33,Manhattan
+161,LaGuardia Pl & W 3 St,40.7290,-73.9989,35,Manhattan
+164,E 47 St & 2 Ave,40.7535,-73.9701,64,Manhattan
+167,E 39 St & 3 Ave,40.7489,-73.9768,45,Manhattan
+168,W 18 St & 6 Ave,40.7394,-73.9944,47,Manhattan
+173,Broadway & W 49 St,40.7604,-73.9849,59,Manhattan
+212,W 16 St & The High Line,40.7431,-74.0070,30,Manhattan
+223,W 13 St & 7 Ave,40.7378,-73.9999,33,Manhattan
+228,E 48 St & 3 Ave,40.7546,-73.9712,55,Manhattan
+232,Cadman Plaza E & Tillary St,40.6961,-73.9907,23,Brooklyn
+236,St Marks Pl & 2 Ave,40.7280,-73.9876,27,Manhattan
+239,Willoughby St & Fleet St,40.6924,-73.9836,31,Brooklyn
+241,DeKalb Ave & S Portland Ave,40.6892,-73.9744,23,Brooklyn
+247,Perry St & Bleecker St,40.7354,-74.0047,30,Manhattan
+249,Harrison St & Hudson St,40.7183,-74.0091,27,Manhattan
+252,MacDougal St & Washington Sq,40.7323,-73.9985,30,Manhattan
+257,Lispenard St & Broadway,40.7195,-74.0021,39,Manhattan
+259,South St & Whitehall St,40.7011,-74.0125,30,Manhattan
+260,Broad St & Bridge St,40.7043,-74.0118,30,Manhattan
+281,Grand Army Plaza & Central Park S,40.7641,-73.9738,63,Manhattan
+284,Greenwich Ave & 8 Ave,40.7391,-74.0019,31,Manhattan
+293,Lafayette St & E 8 St,40.7300,-73.9910,38,Manhattan
+295,Pike St & E Broadway,40.7141,-73.9924,25,Manhattan
+297,E 15 St & 3 Ave,40.7349,-73.9865,37,Manhattan
+301,E 2 St & Avenue B,40.7225,-73.9837,20,Manhattan
+303,Mercer St & Spring St,40.7243,-73.9996,32,Manhattan
+305,E 58 St & 3 Ave,40.7618,-73.9677,39,Manhattan
+327,Vesey Pl & River Terrace,40.7154,-74.0165,39,Manhattan
+347,Greenwich St & W Houston St,40.7284,-74.0091,44,Manhattan
+3236,W 42 St & Dyer Ave,40.7579,-73.9937,57,Manhattan
+3255,8 Ave & W 31 St,40.7505,-73.9946,61,Manhattan
+3423,West Drive & Prospect Park West,40.6608,-73.9714,21,Brooklyn
+3459,2 Ave & E 72 St,40.7688,-73.9579,39,Manhattan
+3687,E 33 St & 1 Ave,40.7439,-73.9756,22,Manhattan
