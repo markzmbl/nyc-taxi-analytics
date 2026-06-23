@@ -43,7 +43,6 @@ _exclude:
   - ".github/workflows/squad-issue-assign.yml"
   - ".github/workflows/squad-triage.yml"
   - ".github/workflows/sync-squad-labels.yml"
-  - ".mcp.json"
   - ".copier-answers-squad.yml"
   # NYC demo — dropped when include_demo is false
   - "{% if not include_demo %}transform/models/demo{% endif %}"
