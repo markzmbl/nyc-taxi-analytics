@@ -9,14 +9,13 @@
 _templates_suffix: ".jinja"
 _answers_file: .copier-answers.yml
 
-# After generating a project, layer the squad (GLM-driven agent team) on top by
-# applying the pattern-perspectives/squad template. This ships the squad + the
-# z.ai/GLM runner launcher into EVERY generated repo, tracked separately
-# (.copier-answers-squad.yml) so `copier update --answers-file .copier-answers-squad.yml`
-# keeps it current. Requires: copier + access to the (private) squad repo at gen
-# time, and `copier copy --trust` (this _tasks step is why generation needs --trust).
+# After generating a project, vendor the squad (GLM-driven agent team) into it from
+# pattern-perspectives/squad. The squad is NOT a Copier template (Copier is used only
+# for this blueprint) — it's a plain git clone + copy via scripts/vendor-squad.sh.
+# Non-fatal: if the (private) squad repo isn't accessible at gen time, generation still
+# succeeds and the script prints how to add it later. Needs `--trust` to run _tasks.
 _tasks:
-  - "copier copy --trust --defaults gh:pattern-perspectives/squad . || echo '[blueprint] squad not applied (pattern-perspectives/squad not accessible). Run later: copier copy gh:pattern-perspectives/squad .'"
+  - "bash scripts/vendor-squad.sh"
 
 _exclude:
   # Blueprint-only meta (don't ship into generated projects)
@@ -43,7 +42,6 @@ _exclude:
   - ".github/workflows/squad-issue-assign.yml"
   - ".github/workflows/squad-triage.yml"
   - ".github/workflows/sync-squad-labels.yml"
-  - ".copier-answers-squad.yml"
   # NYC demo — dropped when include_demo is false
   - "{% if not include_demo %}transform/models/demo{% endif %}"
   - "{% if not include_demo %}ingestion/sources/nyc_zones.py{% endif %}"
