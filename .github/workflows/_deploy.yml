@@ -1,0 +1,74 @@
+name: _deploy (reusable)
+
+# Reusable tier deployer. The three tier workflows (studio/atelier/resident)
+# call this with the chosen components as inputs, so the tier = footprint and
+# warehouse/ingestion/serving/cloud are interchangeable per run.
+
+on:
+  workflow_call:
+    inputs:
+      tier:
+        description: studio | atelier | resident
+        required: true
+        type: string
+      warehouse:
+        description: duckdb | motherduck | clickhouse
+        required: false
+        type: string
+        default: duckdb
+      ingestion:
+        description: dlt | airbyte
+        required: false
+        type: string
+        default: dlt
+      serving:
+        description: "comma-separated: metabase,superset,cube"
+        required: false
+        type: string
+        default: metabase
+      cloud:
+        description: aws | azure | gcp (resident only)
+        required: false
+        type: string
+        default: aws
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      STACK_TIER: ${{ inputs.tier }}
+      STACK_WAREHOUSE: ${{ inputs.warehouse }}
+      STACK_INGESTION: ${{ inputs.ingestion }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Resolve warehouse extra
+        id: extra
+        run: echo "name=${{ inputs.warehouse }}" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,${{ steps.extra.outputs.name }}]"
+
+      - name: Build — Studio (local process, DuckDB/MotherDuck)
+        if: ${{ inputs.tier == 'studio' }}
+        run: make studio
+
+      - name: Build — Atelier (Docker Compose, ClickHouse)
+        if: ${{ inputs.tier == 'atelier' }}
+        run: make atelier
+
+      - name: Deploy — Resident (cloud IaC)
+        if: ${{ inputs.tier == 'resident' }}
+        run: |
+          echo "Resident deploy to cloud=${{ inputs.cloud }} (warehouse=${{ inputs.warehouse }})"
+          echo "Wire infra/${{ inputs.cloud }} terraform here (plan/apply)."
+          # cd infra/${{ inputs.cloud }} && terraform init && terraform apply -auto-approve
+
+      - name: Serving slot (recorded)
+        run: echo "serving=${{ inputs.serving }} — provisioned via serving/ compose / managed service"

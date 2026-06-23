@@ -1,0 +1,42 @@
+name: Template smoke
+
+# Proves the blueprint itself: `copier copy` produces a project that installs
+# and runs end-to-end. Runs the DuckDB/dlt Studio combo (CI-friendly, no Docker).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  generate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install copier
+        run: pipx install copier || pip install copier
+
+      - name: Generate a project from the blueprint
+        run: |
+          copier copy --defaults --trust \
+            --data project_name="Smoke Co" \
+            --data warehouse_engine=duckdb \
+            --data ingestion_tool=dlt \
+            --data serving=metabase \
+            --data include_demo=true \
+            . ../generated
+
+      - name: Install the generated project (fresh)
+        working-directory: ../generated
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,duckdb]"
+
+      - name: Build end-to-end (Studio / DuckDB)
+        working-directory: ../generated
+        run: make studio

@@ -1,0 +1,32 @@
+name: Studio
+
+# Studio tier = local single process (DuckDB/MotherDuck), no Docker.
+# Runs as a PR smoke (defaults) and on-demand with component inputs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      warehouse:
+        type: choice
+        options: [duckdb, motherduck]
+        default: duckdb
+      ingestion:
+        type: choice
+        options: [dlt, airbyte]
+        default: dlt
+      serving:
+        description: "comma-separated: metabase,superset,cube"
+        type: string
+        default: metabase
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  studio:
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      tier: studio
+      warehouse: ${{ inputs.warehouse || 'duckdb' }}
+      ingestion: ${{ inputs.ingestion || 'dlt' }}
+      serving: ${{ inputs.serving || 'metabase' }}
+    secrets: inherit

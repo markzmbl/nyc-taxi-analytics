@@ -1,0 +1,30 @@
+name: Atelier
+
+# Atelier tier = Docker Compose (server-backed engine). On-demand; defaults to
+# ClickHouse. DuckDB/MotherDuck are valid here too (no server needed).
+
+on:
+  workflow_dispatch:
+    inputs:
+      warehouse:
+        type: choice
+        options: [clickhouse, duckdb, motherduck]
+        default: clickhouse
+      ingestion:
+        type: choice
+        options: [dlt, airbyte]
+        default: dlt
+      serving:
+        description: "comma-separated: metabase,superset,cube"
+        type: string
+        default: superset
+
+jobs:
+  atelier:
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      tier: atelier
+      warehouse: ${{ inputs.warehouse || 'clickhouse' }}
+      ingestion: ${{ inputs.ingestion || 'dlt' }}
+      serving: ${{ inputs.serving || 'superset' }}
+    secrets: inherit

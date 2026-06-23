@@ -1,0 +1,35 @@
+name: Resident
+
+# Resident tier = cloud / k8s via IaC. On-demand only; adds the cloud target.
+# Managed engines (MotherDuck / ClickHouse Cloud) are typical here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      warehouse:
+        type: choice
+        options: [clickhouse, motherduck]
+        default: motherduck
+      ingestion:
+        type: choice
+        options: [dlt, airbyte]
+        default: dlt
+      serving:
+        description: "comma-separated: metabase,superset,cube"
+        type: string
+        default: cube
+      cloud:
+        type: choice
+        options: [aws, azure, gcp]
+        default: aws
+
+jobs:
+  resident:
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      tier: resident
+      warehouse: ${{ inputs.warehouse || 'motherduck' }}
+      ingestion: ${{ inputs.ingestion || 'dlt' }}
+      serving: ${{ inputs.serving || 'cube' }}
+      cloud: ${{ inputs.cloud || 'aws' }}
+    secrets: inherit
