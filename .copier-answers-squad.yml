@@ -1,5 +1,5 @@
 # Records the squad template's answers so `copier update --answers-file
 # .copier-answers-squad.yml` can pull later squad improvements. Do not edit.
 _commit: 0664787
-_src_path: gh:markzmbl/papers
+_src_path: gh:pattern-perspectives/squad
 

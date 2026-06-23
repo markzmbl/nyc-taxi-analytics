@@ -9,6 +9,15 @@
 _templates_suffix: ".jinja"
 _answers_file: .copier-answers.yml
 
+# After generating a project, layer the squad (GLM-driven agent team) on top by
+# applying the pattern-perspectives/squad template. This ships the squad + the
+# z.ai/GLM runner launcher into EVERY generated repo, tracked separately
+# (.copier-answers-squad.yml) so `copier update --answers-file .copier-answers-squad.yml`
+# keeps it current. Requires: copier + access to the (private) squad repo at gen
+# time, and `copier copy --trust` (this _tasks step is why generation needs --trust).
+_tasks:
+  - "copier copy --trust --defaults gh:pattern-perspectives/squad . || echo '[blueprint] squad not applied (pattern-perspectives/squad not accessible). Run later: copier copy gh:pattern-perspectives/squad .'"
+
 _exclude:
   # Blueprint-only meta (don't ship into generated projects)
   - "copier.yml"
