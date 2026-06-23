@@ -1,4 +1,0 @@
-granularity_id,granularity_name,date_trunc_arg
-1,Day,day
-2,Week,week
-3,Month,month

@@ -23,9 +23,6 @@ dagster_home/.telemetry/
 dagster_home/*.yaml.lock
 
 # dbt
-dbt/target/
-dbt/dbt_packages/
-dbt/logs/
 transform/target/
 transform/dbt_packages/
 transform/logs/
