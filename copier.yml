@@ -9,14 +9,6 @@
 _templates_suffix: ".jinja"
 _answers_file: .copier-answers.yml
 
-# After generating a project, vendor the squad (GLM-driven agent team) into it from
-# pattern-perspectives/squad. The squad is NOT a Copier template (Copier is used only
-# for this blueprint) — it's a plain git clone + copy via scripts/vendor-squad.sh.
-# Non-fatal: if the (private) squad repo isn't accessible at gen time, generation still
-# succeeds and the script prints how to add it later. Needs `--trust` to run _tasks.
-_tasks:
-  - "bash scripts/vendor-squad.sh"
-
 _exclude:
   # Blueprint-only meta (don't ship into generated projects)
   - "copier.yml"
@@ -32,16 +24,8 @@ _exclude:
   - "**/.mypy_cache"
   - "**/.ruff_cache"
   - "node_modules"
-  # Squad / dev-team tooling — the squad is YOUR team, not shipped to customers
-  - ".squad"
-  - ".copilot"
+  # Dev-team tooling — not shipped to customers
   - ".claude"
-  - ".github/agents"
-  - ".github/copilot-instructions.md"
-  - ".github/workflows/squad-heartbeat.yml"
-  - ".github/workflows/squad-issue-assign.yml"
-  - ".github/workflows/squad-triage.yml"
-  - ".github/workflows/sync-squad-labels.yml"
   # NYC demo — dropped when include_demo is false
   - "{% if not include_demo %}transform/models/demo{% endif %}"
   - "{% if not include_demo %}ingestion/sources/nyc_zones.py{% endif %}"

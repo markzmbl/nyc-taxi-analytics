@@ -42,10 +42,6 @@ dbt/logs/
 .terraform/
 override.tf
 
-# Squad / project management
-.squad/
-.ai-team/
-
 # GitHub workflows (not needed at runtime)
 .github/
 
