@@ -21,6 +21,12 @@ node_modules/
 dagster_home/storage/
 dagster_home/.telemetry/
 dagster_home/*.yaml.lock
+# Run history / schedule DBs are per-machine runtime state, not source. These
+# were tracked until they were purged from history; keep them out for good.
+dagster_home/history/
+dagster_home/schedules/
+# Ephemeral DAGSTER_HOME dirs created by dbt test runs
+dbt/.tmp_dagster_home_*/
 
 # dbt
 transform/target/
